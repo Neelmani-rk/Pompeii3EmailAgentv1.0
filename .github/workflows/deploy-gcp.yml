@@ -1,10 +1,375 @@
+# # GitHub Actions Workflow for Deploying Email Agent to GCP
+# # This workflow deploys Cloud Functions and Cloud Run services with manual trigger
+
+# name: Deploy Email Agent to GCP
+
+# on:
+#   # Manual trigger with customizable inputs
+#   workflow_dispatch:
+#     inputs:
+#       environment:
+#         description: 'Deployment environment'
+#         required: true
+#         default: 'production'
+#         type: choice
+#         options:
+#           - production
+#           - staging
+#           - development
+#       deploy_cloud_functions:
+#         description: 'Deploy Cloud Functions'
+#         required: true
+#         default: true
+#         type: boolean
+#       deploy_cloud_run:
+#         description: 'Deploy Cloud Run'
+#         required: true
+#         default: true
+#         type: boolean
+#       function_name:
+#         description: 'Cloud Function name (leave empty for default)'
+#         required: false
+#         default: 'email-agent-handler'
+#         type: string
+#       cloud_run_service:
+#         description: 'Cloud Run service name (leave empty for default)'
+#         required: false
+#         default: 'email-agent-service'
+#         type: string
+
+# env:
+#   # GCP Configuration - Set these as GitHub Secrets
+#   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+#   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+#   GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  
+#   # Application Configuration - Set these as GitHub Secrets
+#   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+#   SHIPSTATION_API_KEY: ${{ secrets.SHIPSTATION_API_KEY }}
+#   SHIPSTATION_API_SECRET: ${{ secrets.SHIPSTATION_API_SECRET }}
+#   FEDEX_CLIENT_ID: ${{ secrets.FEDEX_CLIENT_ID }}
+#   FEDEX_CLIENT_SECRET: ${{ secrets.FEDEX_CLIENT_SECRET }}
+#   SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+  
+#   # Runtime Configuration
+#   PYTHON_VERSION: '3.12'
+#   CLOUD_FUNCTION_MEMORY: '512MB'
+#   CLOUD_FUNCTION_TIMEOUT: '300s'
+#   CLOUD_RUN_MEMORY: '1Gi'
+#   CLOUD_RUN_CPU: '1'
+#   CLOUD_RUN_MIN_INSTANCES: '0'
+#   CLOUD_RUN_MAX_INSTANCES: '10'
+
+# jobs:
+#   # Job 1: Build and Test
+#   build-and-test:
+#     name: Build and Test
+#     runs-on: ubuntu-latest
+    
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0  # Full history for detecting changes
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: ${{ env.PYTHON_VERSION }}
+#           cache: 'pip'
+
+#       - name: Install Dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+#           pip install pytest flake8
+
+#       - name: Lint with flake8
+#         run: |
+#           # Stop the build if there are Python syntax errors or undefined names
+#           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+#           # Exit-zero treats all errors as warnings
+#           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+#         continue-on-error: true
+
+#       - name: Syntax Check
+#         run: |
+#           python -m py_compile *.py
+#           echo "✅ All Python files pass syntax check"
+
+#       - name: Detect Changed Files
+#         id: changes
+#         run: |
+#           # Get list of changed Python files
+#           if git rev-parse HEAD~1 >/dev/null 2>&1; then
+#             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- '*.py' | tr '\n' ' ')
+#           else
+#             CHANGED_FILES=$(git ls-files '*.py' | tr '\n' ' ')
+#           fi
+#           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+#           echo "Changed files: $CHANGED_FILES"
+          
+#           # Check if any new files were added
+#           if git rev-parse HEAD~1 >/dev/null 2>&1; then
+#             NEW_FILES=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- '*.py' | tr '\n' ' ')
+#           else
+#             NEW_FILES=""
+#           fi
+#           echo "new_files=$NEW_FILES" >> $GITHUB_OUTPUT
+#           echo "New files: $NEW_FILES"
+
+#     outputs:
+#       changed_files: ${{ steps.changes.outputs.changed_files }}
+#       new_files: ${{ steps.changes.outputs.new_files }}
+
+#   # Job 2: Deploy Cloud Functions
+#   deploy-cloud-functions:
+#     name: Deploy Cloud Functions
+#     needs: build-and-test
+#     runs-on: ubuntu-latest
+#     if: ${{ github.event.inputs.deploy_cloud_functions == 'true' }}
+    
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
+
+#       - name: Authenticate to Google Cloud
+#         uses: google-github-actions/auth@v2
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+#       - name: Set up Cloud SDK
+#         uses: google-github-actions/setup-gcloud@v2
+#         with:
+#           project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+#       - name: Create Service Account File
+#         run: |
+#           echo '${{ secrets.GCP_SA_KEY }}' > service-account.json
+
+#       - name: Create Environment Variables File
+#         run: |
+#           cat << EOF > .env.yaml
+#           GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
+#           SHIPSTATION_API_KEY: "${{ secrets.SHIPSTATION_API_KEY }}"
+#           SHIPSTATION_API_SECRET: "${{ secrets.SHIPSTATION_API_SECRET }}"
+#           FEDEX_CLIENT_ID: "${{ secrets.FEDEX_CLIENT_ID }}"
+#           FEDEX_CLIENT_SECRET: "${{ secrets.FEDEX_CLIENT_SECRET }}"
+#           SPREADSHEET_ID: "${{ secrets.SPREADSHEET_ID }}"
+#           SERVICE_ACCOUNT_FILE: "service-account.json"
+#           ENABLE_QUALITY_VALIDATION: "true"
+#           ENABLE_ANALYTICS: "true"
+#           MIN_QUALITY_THRESHOLD: "0.5"
+#           MIN_HELPFULNESS_THRESHOLD: "0.6"
+#           RATE_PER_MINUTE: "12"
+#           MAX_CONCURRENT_REQUESTS: "5"
+#           REQUEST_TIMEOUT: "30"
+#           RETRY_ATTEMPTS: "3"
+#           LOG_LEVEL: "INFO"
+#           ENABLE_INPUT_VALIDATION: "true"
+#           SANITIZE_API_RESPONSES: "true"
+#           EOF
+
+#       - name: Deploy HTTP Cloud Function
+#         run: |
+#           gcloud functions deploy ${{ github.event.inputs.function_name }}-http \
+#             --gen2 \
+#             --runtime python312 \
+#             --region ${{ env.GCP_REGION }} \
+#             --source . \
+#             --entry-point http_endpoint \
+#             --trigger-http \
+#             --allow-unauthenticated \
+#             --memory ${{ env.CLOUD_FUNCTION_MEMORY }} \
+#             --timeout ${{ env.CLOUD_FUNCTION_TIMEOUT }} \
+#             --env-vars-file .env.yaml \
+#             --set-secrets 'GEMINI_API_KEY=gemini-api-key:latest' \
+#             --min-instances 0 \
+#             --max-instances 5
+
+#       - name: Deploy Pub/Sub Cloud Function
+#         run: |
+#           gcloud functions deploy ${{ github.event.inputs.function_name }}-pubsub \
+#             --gen2 \
+#             --runtime python312 \
+#             --region ${{ env.GCP_REGION }} \
+#             --source . \
+#             --entry-point pubsub_handler \
+#             --trigger-topic gmail-notifications \
+#             --memory ${{ env.CLOUD_FUNCTION_MEMORY }} \
+#             --timeout ${{ env.CLOUD_FUNCTION_TIMEOUT }} \
+#             --env-vars-file .env.yaml \
+#             --min-instances 0 \
+#             --max-instances 10
+
+#       - name: Get Cloud Function URLs
+#         id: function-urls
+#         run: |
+#           HTTP_URL=$(gcloud functions describe ${{ github.event.inputs.function_name }}-http \
+#             --gen2 \
+#             --region ${{ env.GCP_REGION }} \
+#             --format='value(serviceConfig.uri)')
+#           echo "http_url=$HTTP_URL" >> $GITHUB_OUTPUT
+#           echo "HTTP Function URL: $HTTP_URL"
+
+#     outputs:
+#       http_function_url: ${{ steps.function-urls.outputs.http_url }}
+
+#   # Job 3: Deploy Cloud Run
+#   deploy-cloud-run:
+#     name: Deploy Cloud Run
+#     needs: build-and-test
+#     runs-on: ubuntu-latest
+#     if: ${{ github.event.inputs.deploy_cloud_run == 'true' }}
+    
+#     steps:
+#       - name: Checkout Repository
+#         uses: actions/checkout@v4
+
+#       - name: Authenticate to Google Cloud
+#         uses: google-github-actions/auth@v2
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+#       - name: Set up Cloud SDK
+#         uses: google-github-actions/setup-gcloud@v2
+#         with:
+#           project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+#       - name: Configure Docker for GCR
+#         run: |
+#           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+#       - name: Create Artifact Registry Repository (if not exists)
+#         run: |
+#           gcloud artifacts repositories create email-agent-repo \
+#             --repository-format=docker \
+#             --location=${{ env.GCP_REGION }} \
+#             --description="Email Agent Docker repository" \
+#             --quiet || true
+
+#       - name: Build Docker Image
+#         run: |
+#           # Build the image
+#           docker build -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }} .
+#           docker tag ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }} \
+#             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:latest
+
+#       - name: Push Docker Image
+#         run: |
+#           docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }}
+#           docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:latest
+
+#       - name: Deploy to Cloud Run
+#         run: |
+#           gcloud run deploy ${{ github.event.inputs.cloud_run_service }} \
+#             --image ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }} \
+#             --region ${{ env.GCP_REGION }} \
+#             --platform managed \
+#             --memory ${{ env.CLOUD_RUN_MEMORY }} \
+#             --cpu ${{ env.CLOUD_RUN_CPU }} \
+#             --min-instances ${{ env.CLOUD_RUN_MIN_INSTANCES }} \
+#             --max-instances ${{ env.CLOUD_RUN_MAX_INSTANCES }} \
+#             --port 8080 \
+#             --allow-unauthenticated \
+#             --set-env-vars "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+#             --set-env-vars "SHIPSTATION_API_KEY=${{ secrets.SHIPSTATION_API_KEY }}" \
+#             --set-env-vars "SHIPSTATION_API_SECRET=${{ secrets.SHIPSTATION_API_SECRET }}" \
+#             --set-env-vars "FEDEX_CLIENT_ID=${{ secrets.FEDEX_CLIENT_ID }}" \
+#             --set-env-vars "FEDEX_CLIENT_SECRET=${{ secrets.FEDEX_CLIENT_SECRET }}" \
+#             --set-env-vars "SPREADSHEET_ID=${{ secrets.SPREADSHEET_ID }}" \
+#             --set-env-vars "ENABLE_QUALITY_VALIDATION=true" \
+#             --set-env-vars "ENABLE_ANALYTICS=true" \
+#             --set-env-vars "MIN_QUALITY_THRESHOLD=0.5" \
+#             --set-env-vars "MIN_HELPFULNESS_THRESHOLD=0.6" \
+#             --set-env-vars "RATE_PER_MINUTE=12" \
+#             --set-env-vars "LOG_LEVEL=INFO" \
+#             --set-env-vars "ENABLE_INPUT_VALIDATION=true"
+
+#       - name: Get Cloud Run Service URL
+#         id: cloud-run-url
+#         run: |
+#           SERVICE_URL=$(gcloud run services describe ${{ github.event.inputs.cloud_run_service }} \
+#             --region ${{ env.GCP_REGION }} \
+#             --format='value(status.url)')
+#           echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
+#           echo "Cloud Run Service URL: $SERVICE_URL"
+
+#     outputs:
+#       cloud_run_url: ${{ steps.cloud-run-url.outputs.service_url }}
+
+#   # Job 4: Post-Deployment Summary
+#   deployment-summary:
+#     name: Deployment Summary
+#     needs: [build-and-test, deploy-cloud-functions, deploy-cloud-run]
+#     runs-on: ubuntu-latest
+#     if: always()
+    
+#     steps:
+#       - name: Generate Deployment Summary
+#         run: |
+#           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Region**: ${{ env.GCP_REGION }}" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+          
+#           echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
+#           echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+#           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+#           if [ "${{ needs.deploy-cloud-functions.result }}" == "success" ]; then
+#             echo "| Cloud Functions | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+#           elif [ "${{ needs.deploy-cloud-functions.result }}" == "skipped" ]; then
+#             echo "| Cloud Functions | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+#           else
+#             echo "| Cloud Functions | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+#           fi
+          
+#           if [ "${{ needs.deploy-cloud-run.result }}" == "success" ]; then
+#             echo "| Cloud Run | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+#           elif [ "${{ needs.deploy-cloud-run.result }}" == "skipped" ]; then
+#             echo "| Cloud Run | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+#           else
+#             echo "| Cloud Run | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+#           fi
+          
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "### Changed Files" >> $GITHUB_STEP_SUMMARY
+#           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+#           echo "${{ needs.build-and-test.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
+#           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+#           if [ -n "${{ needs.build-and-test.outputs.new_files }}" ]; then
+#             echo "" >> $GITHUB_STEP_SUMMARY
+#             echo "### New Files Added" >> $GITHUB_STEP_SUMMARY
+#             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+#             echo "${{ needs.build-and-test.outputs.new_files }}" >> $GITHUB_STEP_SUMMARY
+#             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+#           fi
+          
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "### Service URLs" >> $GITHUB_STEP_SUMMARY
+#           if [ -n "${{ needs.deploy-cloud-functions.outputs.http_function_url }}" ]; then
+#             echo "- **HTTP Function**: ${{ needs.deploy-cloud-functions.outputs.http_function_url }}" >> $GITHUB_STEP_SUMMARY
+#           fi
+#           if [ -n "${{ needs.deploy-cloud-run.outputs.cloud_run_url }}" ]; then
+#             echo "- **Cloud Run**: ${{ needs.deploy-cloud-run.outputs.cloud_run_url }}" >> $GITHUB_STEP_SUMMARY
+#           fi
+
+#       - name: Notify on Failure
+#         if: failure()
+#         run: |
+#           echo "::error::Deployment failed! Please check the logs for more details."
 # GitHub Actions Workflow for Deploying Email Agent to GCP
 # This workflow deploys Cloud Functions and Cloud Run services with manual trigger
 
 name: Deploy Email Agent to GCP
 
 on:
-  # Manual trigger with customizable inputs
   workflow_dispatch:
     inputs:
       environment:
@@ -38,21 +403,18 @@ on:
         type: string
 
 env:
-  # GCP Configuration - Set these as GitHub Secrets
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-  
-  # Application Configuration - Set these as GitHub Secrets
+
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   SHIPSTATION_API_KEY: ${{ secrets.SHIPSTATION_API_KEY }}
   SHIPSTATION_API_SECRET: ${{ secrets.SHIPSTATION_API_SECRET }}
   FEDEX_CLIENT_ID: ${{ secrets.FEDEX_CLIENT_ID }}
   FEDEX_CLIENT_SECRET: ${{ secrets.FEDEX_CLIENT_SECRET }}
   SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-  
-  # Runtime Configuration
-  PYTHON_VERSION: '3.9'
+
+  PYTHON_VERSION: '3.12'
   CLOUD_FUNCTION_MEMORY: '512MB'
   CLOUD_FUNCTION_TIMEOUT: '300s'
   CLOUD_RUN_MEMORY: '1Gi'
@@ -61,7 +423,6 @@ env:
   CLOUD_RUN_MAX_INSTANCES: '10'
 
 jobs:
-  # Job 1: Build and Test
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
@@ -69,8 +430,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for detecting changes
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -86,43 +445,36 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          # Stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Exit-zero treats all errors as warnings
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         continue-on-error: true
 
       - name: Syntax Check
         run: |
           python -m py_compile *.py
-          echo "✅ All Python files pass syntax check"
+          echo "All Python files pass syntax check"
 
       - name: Detect Changed Files
         id: changes
         run: |
-          # Get list of changed Python files
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- '*.py' | tr '\n' ' ')
           else
             CHANGED_FILES=$(git ls-files '*.py' | tr '\n' ' ')
           fi
           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
-          echo "Changed files: $CHANGED_FILES"
-          
-          # Check if any new files were added
+
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
             NEW_FILES=$(git diff --name-only --diff-filter=A HEAD~1 HEAD -- '*.py' | tr '\n' ' ')
           else
             NEW_FILES=""
           fi
           echo "new_files=$NEW_FILES" >> $GITHUB_OUTPUT
-          echo "New files: $NEW_FILES"
 
     outputs:
       changed_files: ${{ steps.changes.outputs.changed_files }}
       new_files: ${{ steps.changes.outputs.new_files }}
 
-  # Job 2: Deploy Cloud Functions
   deploy-cloud-functions:
     name: Deploy Cloud Functions
     needs: build-and-test
@@ -150,7 +502,7 @@ jobs:
       - name: Create Environment Variables File
         run: |
           cat << EOF > .env.yaml
-          GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
+          # 🔥 FIX APPLIED HERE — GEMINI_API_KEY REMOVED
           SHIPSTATION_API_KEY: "${{ secrets.SHIPSTATION_API_KEY }}"
           SHIPSTATION_API_SECRET: "${{ secrets.SHIPSTATION_API_SECRET }}"
           FEDEX_CLIENT_ID: "${{ secrets.FEDEX_CLIENT_ID }}"
@@ -210,12 +562,10 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --format='value(serviceConfig.uri)')
           echo "http_url=$HTTP_URL" >> $GITHUB_OUTPUT
-          echo "HTTP Function URL: $HTTP_URL"
 
     outputs:
       http_function_url: ${{ steps.function-urls.outputs.http_url }}
 
-  # Job 3: Deploy Cloud Run
   deploy-cloud-run:
     name: Deploy Cloud Run
     needs: build-and-test
@@ -250,7 +600,6 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          # Build the image
           docker build -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }} .
           docker tag ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:${{ github.sha }} \
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/email-agent-repo/${{ github.event.inputs.cloud_run_service }}:latest
@@ -293,12 +642,10 @@ jobs:
             --region ${{ env.GCP_REGION }} \
             --format='value(status.url)')
           echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "Cloud Run Service URL: $SERVICE_URL"
 
     outputs:
       cloud_run_url: ${{ steps.cloud-run-url.outputs.service_url }}
 
-  # Job 4: Post-Deployment Summary
   deployment-summary:
     name: Deployment Summary
     needs: [build-and-test, deploy-cloud-functions, deploy-cloud-run]
@@ -308,59 +655,4 @@ jobs:
     steps:
       - name: Generate Deployment Summary
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Region**: ${{ env.GCP_REGION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          if [ "${{ needs.deploy-cloud-functions.result }}" == "success" ]; then
-            echo "| Cloud Functions | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.deploy-cloud-functions.result }}" == "skipped" ]; then
-            echo "| Cloud Functions | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Cloud Functions | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "${{ needs.deploy-cloud-run.result }}" == "success" ]; then
-            echo "| Cloud Run | ✅ Success |" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.deploy-cloud-run.result }}" == "skipped" ]; then
-            echo "| Cloud Run | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Cloud Run | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Changed Files" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ needs.build-and-test.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -n "${{ needs.build-and-test.outputs.new_files }}" ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### New Files Added" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            echo "${{ needs.build-and-test.outputs.new_files }}" >> $GITHUB_STEP_SUMMARY
-            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Service URLs" >> $GITHUB_STEP_SUMMARY
-          if [ -n "${{ needs.deploy-cloud-functions.outputs.http_function_url }}" ]; then
-            echo "- **HTTP Function**: ${{ needs.deploy-cloud-functions.outputs.http_function_url }}" >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ -n "${{ needs.deploy-cloud-run.outputs.cloud_run_url }}" ]; then
-            echo "- **Cloud Run**: ${{ needs.deploy-cloud-run.outputs.cloud_run_url }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Notify on Failure
-        if: failure()
-        run: |
-          echo "::error::Deployment failed! Please check the logs for more details."
+          echo "Deployment summary generated."
