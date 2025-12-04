@@ -200,9 +200,13 @@ def extract_email_body(message: Dict[str, Any], logger: Optional[logging.Logger]
             log.error(f"Error decoding single message body part: {e}")
 
     if body_str:
-        log.info(f"Extracted email body (length: {len(body_str)}). Preview: '{body_str[:200].replace('\n', ' ')}...'")
+        preview = body_str[:200].replace("\n", " ")
+        log.info(
+            f"Extracted email body (length: {len(body_str)}). Preview: '{preview}...'"
+        )
     else:
         log.warning("Could not extract email body.")
+
         
     return body_str.strip()
 
