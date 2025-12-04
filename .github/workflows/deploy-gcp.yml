@@ -174,7 +174,7 @@ jobs:
         run: |
           gcloud functions deploy ${{ github.event.inputs.function_name }}-http \
             --gen2 \
-            --runtime python39 \
+            --runtime python312 \
             --region ${{ env.GCP_REGION }} \
             --source . \
             --entry-point http_endpoint \
@@ -191,7 +191,7 @@ jobs:
         run: |
           gcloud functions deploy ${{ github.event.inputs.function_name }}-pubsub \
             --gen2 \
-            --runtime python39 \
+            --runtime python312 \
             --region ${{ env.GCP_REGION }} \
             --source . \
             --entry-point pubsub_handler \
