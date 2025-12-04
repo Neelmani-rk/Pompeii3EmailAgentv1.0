@@ -399,7 +399,7 @@ on:
       cloud_run_service:
         description: 'Cloud Run service name (leave empty for default)'
         required: false
-        default: 'email-agent-service'
+        default: 'pompeii-agent'
         type: string
 
 env:
