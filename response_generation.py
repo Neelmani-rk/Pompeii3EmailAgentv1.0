@@ -417,7 +417,7 @@ def call_gemini_api(llm_payload: Dict[str, Any], logger: Optional[logging.Logger
         genai.configure(api_key=api_key)
         
         # Initialize the model
-        model = genai.GenerativeModel('gemini-3-pro')
+        model = genai.GenerativeModel('gemini-3-pro-preview')
         
         # Get the appropriate system prompt based on intent
         intent_category = llm_payload.get('intent', {}).get('category', 'general-query')

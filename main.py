@@ -214,7 +214,7 @@ def process_email(message_id: str, service: Any, logger: logging.Logger) -> Opti
         logger.info(f"Detected Intent: {email_data['intent'].get('primary')}")
         
         # Entity extraction
-        entity_extractor = EntityExtractor(api_key=GEMINI_API_KEY, model_name="gemini-3-pro")
+        entity_extractor = EntityExtractor(api_key=GEMINI_API_KEY, model_name="gemini-3-pro-preview")
         extracted_entities_obj = entity_extractor.extract_entities(text_for_nlp)
         
         # Add order numbers from subject

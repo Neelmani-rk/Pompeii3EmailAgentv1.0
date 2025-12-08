@@ -14,7 +14,7 @@ class ExtractedEntity:
     confidence: float
 
 class EntityExtractor:
-    def __init__(self, api_key: str, model_name: str = "gemini-3-pro"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3-pro-preview"):
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
         
@@ -216,7 +216,7 @@ RESPONSE (JSON only):
         return unique_entities
 
 
-def extract_entities_from_image_text(text: str, logger: logging.Logger = None, api_key: str = GEMINI_API_KEY, model_name: str = "gemini-3-pro") -> List[ExtractedEntity]:
+def extract_entities_from_image_text(text: str, logger: logging.Logger = None, api_key: str = GEMINI_API_KEY, model_name: str = "gemini-3-pro-preview") -> List[ExtractedEntity]:
     """
     Extracts business-relevant entities from text obtained via OCR from an image using Gemini AI.
     
@@ -282,7 +282,7 @@ def extract_entities_with_patterns(
     entity_type: str, 
     logger: logging.Logger = None,
     api_key: str = GEMINI_API_KEY,
-    model_name: str = "gemini-3-pro"
+    model_name: str = "gemini-3-pro-preview"
 ) -> List[ExtractedEntity]:
     """
     Extract entities using Gemini AI instead of regex patterns.
@@ -346,7 +346,7 @@ def extract_text_from_image_with_gemini(image_bytes: bytes, api_key: str, logger
     """
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-3-pro")
+        model = genai.GenerativeModel("gemini-3-pro-preview")
         
         # Determine MIME type based on image header
         mime_type = "image/jpeg"  # Default
@@ -407,7 +407,7 @@ def extract_entities_from_image_bytes(image_bytes: bytes, api_key: str, logger=N
         logger.info(f"Cleaned OCR text length: {len(cleaned_text)} characters")
     
     # Step 3: Extract entities using Gemini
-    entity_extractor = EntityExtractor(api_key=api_key, model_name="gemini-3-pro")
+    entity_extractor = EntityExtractor(api_key=api_key, model_name="gemini-3-pro-preview")
     entities = entity_extractor.extract_entities(cleaned_text)
     
     if logger:

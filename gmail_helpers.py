@@ -373,7 +373,7 @@ def process_thread_images(
         
         log.info(f"Found {len(messages_to_scan)} previous message(s) in thread {thread_id} to scan.")
         
-        entity_extractor = EntityExtractor(api_key=GEMINI_API_KEY, model_name="gemini-3-pro")
+        entity_extractor = EntityExtractor(api_key=GEMINI_API_KEY, model_name="gemini-3-pro-preview")
         
         for prev_msg_full_data in messages_to_scan:
             prev_msg_id = prev_msg_full_data['id']

@@ -450,7 +450,7 @@ def detect_intent_with_gemini(text: str, logger: Optional[logging.Logger] = None
         return detect_intent_fallback(text, log)
 
     # Use the correct Gemini 3 Pro model name
-    gemini_model_name = "gemini-3-pro"
+    gemini_model_name = "gemini-3-pro-preview-preview"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
 
@@ -626,7 +626,7 @@ def analyze_email_sentiment_with_gemini(text: str, logger: Optional[logging.Logg
         log.warning("Text too short for sentiment analysis.")
         return None
 
-    gemini_model_name = "gemini-3-pro"
+    gemini_model_name = "gemini-3-pro-preview-preview"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
 
@@ -825,7 +825,7 @@ def call_gemini_api(
         log.error("Gemini API key not provided. Cannot call API.")
         return initial_response_text  # Return original if no key
 
-    gemini_model_name = "gemini-3-pro"  # Using consistent model across the codebase
+    gemini_model_name = "gemini-3-pro-preview-preview"  # Using consistent model across the codebase
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model_name}:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
 

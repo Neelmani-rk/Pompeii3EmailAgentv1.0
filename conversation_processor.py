@@ -12,7 +12,7 @@ class ConversationProcessor:
         self.gemini_api_key = gemini_api_key
         self.storage_client = storage_client
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-3-pro')
+        self.model = genai.GenerativeModel('gemini-3-pro-preview-preview')
         self.logger = logging.getLogger(__name__)
         
     def process_conversation_history(self, email_text: str, thread_id: str) -> Dict[str, Any]:

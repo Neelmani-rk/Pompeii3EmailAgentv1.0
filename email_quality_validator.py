@@ -204,7 +204,7 @@ class EmailQualityValidator:
             try:
                 genai.configure(api_key=GEMINI_API_KEY)
                 self.model = genai.GenerativeModel(
-                    'gemini-3-pro',
+                    'gemini-3-pro-preview-preview',
                     generation_config=genai.types.GenerationConfig(
                         temperature=0.1,  # Low temperature for consistent evaluation
                         max_output_tokens=1500,
